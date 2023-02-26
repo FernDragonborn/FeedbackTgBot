@@ -204,7 +204,7 @@ internal class Telegram
             {
                 int i = 0;
                 var sb = new StringBuilder();
-                var sbFormingSrtDic = new SortedDictionary<DateTime, Schedule>;
+                var sbFormingSrtDic = new SortedDictionary<DateTime, Schedule>();
                 sb.AppendLine("Найближчі заходи: \n");
                 if (eventSrtDic.Count != 0)
                 {
