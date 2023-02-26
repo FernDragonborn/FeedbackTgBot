@@ -1,4 +1,4 @@
-﻿namespace UpWorkTgBot;
+﻿namespace FeedbackTgBot;
 
 internal class User
 {

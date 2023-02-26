@@ -5,7 +5,7 @@ using log4net;
 using Newtonsoft.Json;
 using static System.Console;
 
-namespace UpWorkTgBot;
+namespace FeedbackTgBot;
 public class Crud
 {
     static readonly string[] Scopes = { SheetsService.Scope.Spreadsheets };

@@ -4,7 +4,7 @@ using log4net;
 
 [assembly: log4net.Config.XmlConfigurator]
 
-namespace UpWorkTgBot;
+namespace FeedbackTgBot;
 
 internal class Program
 {

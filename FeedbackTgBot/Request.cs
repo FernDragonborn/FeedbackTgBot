@@ -1,6 +1,4 @@
-﻿using UpWorkTgBot;
-
-namespace FeedbackTgBot
+﻿namespace FeedbackTgBot
 {
     internal class Request
     {

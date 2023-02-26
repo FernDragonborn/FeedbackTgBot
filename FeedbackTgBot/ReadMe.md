@@ -15,7 +15,7 @@ TABLE_NAME_USERS = "назва листа із користувачам"
 TABLE_NAME_EVENTS = "назва листа із поідями"
 Приклад:
 TG_TOKEN = хххххххххх:ххххххххххххххххххххххххххххххххххх
-ADMIN_TOKEN = 561838359
+ADMIN_TOKEN = ххххххххх
 SPREADSHEET_ID_MAIN = 1-LsGwVYi8Yihu5AVVyGlRLP0S03va_mzQ07IIs5FCz0
 TABLE_NAME_REQUESTS = "Requests"
 TABLE_NAME_USERS = "Users"

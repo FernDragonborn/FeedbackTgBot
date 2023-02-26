@@ -1,5 +1,4 @@
-﻿using FeedbackTgBot;
-using log4net;
+﻿using log4net;
 using System.Text;
 using System.Text.RegularExpressions;
 using Telegram.Bot;
@@ -7,10 +6,9 @@ using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
-using Telegram.Bot.Types.InputFiles;
 using Telegram.Bot.Types.ReplyMarkups;
 
-namespace UpWorkTgBot;
+namespace FeedbackTgBot;
 internal class Telegram
 {
     #region Initializtion fields
@@ -21,7 +19,7 @@ internal class Telegram
     Dictionary<states, ReplyKeyboardMarkup> statesDict = CreateMenuDictionary();
     Dictionary<long, User> usersDic = new();
     Dictionary<long, Request> reqDic = new();
-    SortedDictionary<DateTime, Schedule> eventDic = new();
+    SortedDictionary<DateTime, Schedule> eventSrtDic = new();
 
     int workingRowRequests = Crud.FindFirstFreeRow(1, 1);
     int lastRowEvents = Crud.FindFirstFreeRow(1, 3);
@@ -52,22 +50,9 @@ internal class Telegram
 
         await SendMessageAsync(Convert.ToInt64(ADMIN_TOKEN), $"bot initialized\n{DateTime.Now}");
 
-        var eventsList = Crud.ReadEntry(1, 3, $"A2:B{lastRowEvents}");
-        if (eventsList is not null)
-            for (int i = 0; i < eventsList.Count; i++)
-            {
-                var date = (DateTime)eventsList[i][0];
-                try { eventDic.Add(date, new Schedule(date, (string)eventsList[i][1])); }
-                catch (ArgumentException ex) { await SendMessageAsync(ADMIN_TOKEN, $"Помилка бази даних в листі {Crud.TABLE_NAME_EVENTS}. Текст помилки:\n{ex.Message}"); }
-            }
+        await LoadEvents();
 
-        var usersList = Crud.ReadEntry(1, 2, $"A2:B{workingRowRequests}");
-        if (usersList is not null)
-            foreach (var user in usersList)
-            {
-                try { usersDic.Add(Convert.ToInt64(user[0]), new User((string)user[1], Convert.ToInt64(user[0]), states.Start)); }
-                catch (ArgumentException ex) { await SendMessageAsync(ADMIN_TOKEN, $"Помилка бази даних в листі {Crud.TABLE_NAME_USERS}. Текст помилки:\n{ex.Message}"); }
-            }
+        await LoadUsers();
 
         async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
         {
@@ -82,10 +67,10 @@ internal class Telegram
 
             long chatId = message.Chat.Id;
 
-            log.Info($"[TG]: Received eventsList '{messageText}' message in chat {chatId}.");
+            log.Info($"[TG]: In chat {chatId} received: {messageText}");
 
             ///initialization of user 
-            string startMessage = "Привіт, це бот НАЗВА_ЦЕНРУ. Тут можна надати фідбек або отримтаи допомогу. Слідуйте меню знинзу 🥰";
+            string startMessage = "Привіт, це бот Громадського Центру для ВПО. Тут можна надати фідбек або отримати допомогу. Слідуйте меню знинзу 🥰";
             if (messageText == "/start")
             {
                 if (usersDic.ContainsKey(chatId))
@@ -126,29 +111,38 @@ internal class Telegram
                 }
                 else if (usersDic[chatId].State == states.AddEvenet)
                 {
-                    var date = DateTime.Parse(messageText.TrimStart().TrimEnd().Substring(0, messageText.IndexOf(":") + 3));
-                    try { eventDic.Add(date, new Schedule(date, messageText.Substring(messageText.IndexOf(":") + 3))); }
+                    try
+                    {
+                        var date = DateTime.Parse(messageText.TrimStart().TrimEnd().Substring(0, messageText.IndexOf(":") + 3));
+                        if (date < DateTime.Now)
+                        {
+                            await SendMessageAsync(chatId, "Перевірте чи даат, яку ви хочете використати ще не пройшла");
+                            return;
+                        }
+                        var text = messageText.Substring(messageText.IndexOf(":") + 3);
+                        eventSrtDic.Add(date, new Schedule(date, text));
+                        Crud.CreateEntry(1, 3, "A",
+                            new List<object>() {
+                            date.ToString("dd.MM.yyyy HH:mm"), text
+                            }
+                        );
+                    }
                     catch (ArgumentException ex)
                     {
-                        await SendMessageAsync(chatId, ex.Message);
+                        await SendMessageAsync(chatId, $"Помилка, перевірте чи дата ще не пройшла та чи відповідає формату\nТекст помилки:\n{ex.Message}");
                         return;
                     }
-                    Crud.CreateEntry(1, 3, "A",
-                        new List<object>() {
-                            eventDic.Last().Value.Date, eventDic.Last().Value.Text
-                        }
-                    );
                     await SendMessageAsync(ADMIN_TOKEN, "Додав івент");
                     usersDic[chatId].State = states.Start;
                 }
                 else if (messageText == "/sendEvents")
                 {
                     var sb = new StringBuilder();
-                    if (eventDic.Count != 0)
+                    if (eventSrtDic.Count != 0)
                     {
-                        foreach (var eventObj in eventDic)
+                        foreach (var eventObj in eventSrtDic)
                         {
-                            sb.AppendLine(eventObj.Value.Date.ToString());
+                            sb.AppendLine(eventObj.Value.Date.ToString("dd.MM.yyyy HH:mm"));
                             sb.AppendLine(eventObj.Value.Text);
                             sb.AppendLine();
                         }
@@ -156,19 +150,38 @@ internal class Telegram
                     else { sb.Append("нема івентів"); }
                     await SendMessageAsync(ADMIN_TOKEN, sb.ToString());
                 }
-                else if (messageText == "/sendEnv")
+                else if (messageText == "/updateEvents")
                 {
-                    await using Stream stream = System.IO.File.OpenRead(@".env");
-                    Message sendFile = await botClient.SendDocumentAsync(
-                        chatId: chatId,
-                        document: new InputOnlineFile(content: stream, fileName: $".env")
-                        );
-                    log.Info("sended .env to admin");
+                    eventSrtDic.Clear();
+                    try { await LoadEvents(); }
+                    catch (Exception ex)
+                    {
+                        await SendMessageAsync(chatId, $"Виниклаа помилка: {ex.Message}");
+                        return;
+                    }
+                    await SendMessageAsync(chatId, "Оновив івенти");
+                }
+                else if (messageText == "/help")
+                {
+                    await SendMessageAsync(chatId, "Список команд:\n/sendEvents - відображає список усіх івентів\n/addEvent - додати івент");
+                }
+                //else if (messageText == "/sendEnv")
+                //{
+                //    await using Stream stream = System.IO.File.OpenRead(@".env");
+                //    Message sendFile = await botClient.SendDocumentAsync(
+                //        chatId: chatId,
+                //        document: new InputOnlineFile(content: stream, fileName: $".env")
+                //        );
+                //    log.Info("sended .env to admin");
+                //}
+                else
+                {
+                    await SendMessageAsync(chatId, "Не вдалося опрацювати команду, перевірте чи нема помилок");
                 }
             }
 
             ///user commands
-            if (messageText == "/help")
+            if (messageText == "/help" && chatId != ADMIN_TOKEN)
             {
                 await SendMessageAsync(chatId, "Тут можна надати фідбек або отримтаи допомогу. Слідуйте меню знинзу 🥰");
             }
@@ -191,18 +204,24 @@ internal class Telegram
             {
                 int i = 0;
                 var sb = new StringBuilder();
+                var sbFormingSrtDic = new SortedDictionary<DateTime, Schedule>;
                 sb.AppendLine("Найближчі заходи: \n");
-                if (eventDic.Count != 0)
+                if (eventSrtDic.Count != 0)
                 {
-                    foreach (var eventObj in eventDic)
+                    foreach (var eventObj in eventSrtDic)
                     {
-                        if (i > 1) { continue; }
+                        if (eventObj.Value.Date < DateTime.Now) { continue; }
+                        if (i > 1 && eventObj.Value.Date < DateTime.Now.AddDays(7)) { continue; }
+                        sbFormingSrtDic.Add(eventObj.Key, eventObj.Value);
+                        i++;
+                    }
+                    foreach (var eventObj in sbFormingSrtDic)
+                    {
                         sb.Append("<b>");
                         sb.Append(eventObj.Value.Date.ToString("dddd, dd MMMM, HH:mm"));
                         sb.AppendLine("</b>");
                         sb.AppendLine(eventObj.Value.Text.TrimStart());
                         sb.AppendLine();
-                        i++;
                     }
                 }
                 else { sb.Append("нема івентів"); }
@@ -215,7 +234,7 @@ internal class Telegram
                 ///якщо був використаний не визначений стан
                 if (!(Enum.IsDefined(usersDic[chatId].State)))
                 {
-                    await SendMessageAsync(chatId, "Чомусь я не знайшов вашу анкету в себе. Спробуйте обрати пункт із меню, якщо помилка не пропаде, то зверністья у підтримку 😢");
+                    await SendMessageAsync(chatId, "Виникла внутрішня помилка. Спробуйте обрати пункт із меню, якщо помилка не пропаде, то зверністья у підтримку 😢");
                     log.Error($"Помилка: {chatId} не мав визначеного usersDic[chatId].State та відправив повідомлення із текстом:\n{messageText}");
                 }
                 ///якщо не був обраний пункт із меню 
@@ -226,7 +245,7 @@ internal class Telegram
                 else if (usersDic[chatId].State == states.NeedHelp || usersDic[chatId].State == states.GiveHelp || usersDic[chatId].State == states.Support)
                 {
                     await SendMessageAsync(chatId, "Дякую за звернення, я передав ваше повідомлення в гуманітарний штаб 😊\n\nБудь ласка напишіть ваші ПІБ в форматі: Мельник Василій Петрович");
-                    ///workingRowRequests - 1 тому що айді на 1 менше, ніж "робоча строка", через шапку таблиці 
+                    ///workingRowRequests - 1 тому що айді на 1 менше, ніж "робоча строка", через шапку таблиці      
                     reqDic.Add(chatId, new Request(workingRowRequests - 1, chatId, $"@{message.From.Username}", usersDic[chatId].State, messageText));
                     usersDic[chatId].State = states.GetName;
                 }
@@ -272,7 +291,7 @@ internal class Telegram
                     };
                     Crud.CreateEntry(1, 1, "A", reqData);
                     workingRowRequests++;
-                    await SendMessageAsync(ADMIN_TOKEN, CreateRequestMessage(message, reqDic[chatId].ReqState));
+                    await SendMessageAsync(ADMIN_TOKEN, CreateRequestMessage(message, reqDic[chatId]));
                     reqDic.Remove(chatId);
                     await SendMessageAsync(chatId, "Дякую за ваші контактні дані! Із вами зв'яжуться з приводу вашого запиту");
                 }
@@ -299,8 +318,34 @@ internal class Telegram
             return Task.CompletedTask;
         }
     }
-    public static string CreateRequestMessage(Message message, states state)
+
+    private async Task LoadEvents()
     {
+        lastRowEvents = Crud.FindFirstFreeRow(1, 3);
+        var eventsList = Crud.ReadEntry(1, 3, $"A2:B{lastRowEvents}");
+        if (eventsList is not null)
+            for (int i = 0; i < eventsList.Count; i++)
+            {
+                var date = DateTime.Parse((string)eventsList[i][0]);
+                try { eventSrtDic.Add(date, new Schedule(date, (string)eventsList[i][1])); }
+                catch (ArgumentException ex) { await SendMessageAsync(ADMIN_TOKEN, $"Помилка бази даних в листі {Crud.TABLE_NAME_EVENTS}. Текст помилки:\n{ex.Message}"); }
+            }
+    }
+
+    private async Task LoadUsers()
+    {
+        var usersList = Crud.ReadEntry(1, 2, $"A2:B{Crud.FindFirstFreeRow(1, 2)}");
+        if (usersList is not null)
+            foreach (var user in usersList)
+            {
+                try { usersDic.Add(Convert.ToInt64(user[0]), new User((string)user[1], Convert.ToInt64(user[0]), states.Start)); }
+                catch (ArgumentException ex) { await SendMessageAsync(ADMIN_TOKEN, $"Помилка бази даних в листі {Crud.TABLE_NAME_USERS}. Текст помилки:\n{ex.Message}"); }
+            }
+    }
+
+    public static string CreateRequestMessage(Message message, Request req)
+    {
+        states state = req.ReqState;
         if (message.From is null) { return $"Помилка: немає даних\nАйді користувача: {message.Chat.Id}\nЗверніться до адміністратора"; }
         var sb = new StringBuilder();
         //додати на що запит
@@ -309,9 +354,9 @@ internal class Telegram
         else if (state == states.Support) { sb.AppendLine("<b>Класс</b>: #інший_запит"); }
         sb.AppendLine($"<b>Від</b>: {message.From.FirstName} {message.From.LastName} | @{message.From.Username}");
         //додати підтягування номеру телефону із контакту по запиту або об'єкта юзера
-        sb.Append("<b>Номер телефону</b>: ").AppendLine("нема");
+        sb.Append("<b>Номер телефону</b>: ").AppendLine(req.TelNumber);
         sb.AppendLine("<b>Текст запиту</b>: ");
-        sb.AppendLine(message.Text);
+        sb.AppendLine(req.ReqText);
         return sb.ToString();
     }
     public async Task SendMessageAsync(long chatId, string messageText)
