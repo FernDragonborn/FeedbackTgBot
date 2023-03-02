@@ -1,4 +1,5 @@
 ﻿using log4net;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Telegram.Bot;
@@ -48,11 +49,11 @@ internal class Telegram
         var me = await botClient.GetMeAsync();
         log.Info($"Start listening for @{me.Username}");
 
-        await SendMessageAsync(Convert.ToInt64(ADMIN_TOKEN), $"bot initialized\n{DateTime.Now}");
-
         await LoadEvents();
 
         await LoadUsers();
+
+        await SendMessageAsync(Convert.ToInt64(ADMIN_TOKEN), $"bot initialized\n{DateTime.Now}");
 
         async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
         {
@@ -326,7 +327,7 @@ internal class Telegram
         if (eventsList is not null)
             for (int i = 0; i < eventsList.Count; i++)
             {
-                var date = DateTime.Parse((string)eventsList[i][0]);
+                var date = DateTime.ParseExact((string)eventsList[i][0], "dd.MM.yyyy HH:mm:ss", CultureInfo.InvariantCulture);
                 try { eventSrtDic.Add(date, new Schedule(date, (string)eventsList[i][1])); }
                 catch (ArgumentException ex) { await SendMessageAsync(ADMIN_TOKEN, $"Помилка бази даних в листі {Crud.TABLE_NAME_EVENTS}. Текст помилки:\n{ex.Message}"); }
             }
