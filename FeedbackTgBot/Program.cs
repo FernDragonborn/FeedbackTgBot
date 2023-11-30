@@ -1,4 +1,4 @@
-﻿#define DEBUG 
+﻿#define DEBUG
 
 using log4net;
 

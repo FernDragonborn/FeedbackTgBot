@@ -2,11 +2,11 @@
 {
     internal class Request
     {
-        public Request(int reqId, long userId, string telegram, states reqType, string reqText)
+        public Request(int reqId, long userId, string telegram, States reqType, string reqText)
         {
-            if (reqType == states.NeedHelp) { ReqType = "запит на допомогу"; }
-            else if (reqType == states.GiveHelp) { ReqType = "пропозиція допомоги"; }
-            else if (reqType == states.Support) { ReqType = "інший запит"; }
+            if (reqType == States.NeedHelp) { ReqType = "запит на допомогу"; }
+            else if (reqType == States.GiveHelp) { ReqType = "пропозиція допомоги"; }
+            else if (reqType == States.Support) { ReqType = "інший запит"; }
             else { ReqType = "не визначено"; }
             ReqState = reqType;
             ReqId = reqId;
@@ -19,7 +19,7 @@
             ThirdName = "помилка, не надано";
             TelNumber = "помилка, не надано";
         }
-        public states ReqState { get; }
+        public States ReqState { get; }
         public string ReqType { get; }
         public int ReqId { get; }
         public string FirstName { get; set; }

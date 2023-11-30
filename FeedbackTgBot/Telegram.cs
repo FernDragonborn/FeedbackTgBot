@@ -17,7 +17,7 @@ internal class Telegram
 
     private static readonly string TOKEN = DotNetEnv.Env.GetString("TG_TOKEN");
     private static readonly long ADMIN_TOKEN = Convert.ToInt64(DotNetEnv.Env.GetString("ADMIN_TOKEN"));
-    Dictionary<states, ReplyKeyboardMarkup> statesDict = CreateMenuDictionary();
+    Dictionary<States, ReplyKeyboardMarkup> statesDict = CreateMenuDictionary();
     Dictionary<long, User> usersDic = new();
     Dictionary<long, Request> reqDic = new();
     SortedDictionary<DateTime, Schedule> eventSrtDic = new();
@@ -77,40 +77,40 @@ internal class Telegram
                 if (usersDic.ContainsKey(chatId))
                 {
                     if (reqDic.ContainsKey(chatId)) { reqDic.Remove(chatId); }
-                    await SetKeyboard(chatId, statesDict[states.Start], startMessage);
-                    usersDic[chatId].State = states.Start;
+                    await SetKeyboard(chatId, statesDict[States.Start], startMessage);
+                    usersDic[chatId].State = States.Start;
                 }
                 else
                 {
-                    usersDic.Add(chatId, new User(message.From.Username, chatId, states.Start));
+                    usersDic.Add(chatId, new User(message.From.Username, chatId, States.Start));
                     Crud.CreateEntry(1, 2, "A", new List<object>()
                     {
                         usersDic.Last().Value.ChatId,
                         usersDic.Last().Value.Username,
                     });
-                    await SetKeyboard(chatId, statesDict[states.Start], startMessage);
+                    await SetKeyboard(chatId, statesDict[States.Start], startMessage);
                 }
             }
             ///якщо не ствоерний користувач із цим чат айді
             else if (!(usersDic.ContainsKey(chatId)))
             {
-                usersDic.Add(chatId, new User(message.From.Username, chatId, states.Start));
+                usersDic.Add(chatId, new User(message.From.Username, chatId, States.Start));
                 Crud.CreateEntry(1, 2, "A", new List<object>()
                 {
                     usersDic.Last().Value.ChatId,
                     usersDic.Last().Value.Username,
                 });
-                await SetKeyboard(chatId, statesDict[states.Start], "Я не знайшов ваш акаунт у існуючих користувачах, тому створив новий 😊\n\nБудь ласка, повторіть ваш запит");
+                await SetKeyboard(chatId, statesDict[States.Start], "Я не знайшов ваш акаунт у існуючих користувачах, тому створив новий 😊\n\nБудь ласка, повторіть ваш запит");
             }
             ///admin commands
             if (chatId == ADMIN_TOKEN)
             {
                 if (messageText == "/addEvent")
                 {
-                    usersDic[chatId].State = states.AddEvenet;
+                    usersDic[chatId].State = States.AddEvenet;
                     await SendMessageAsync(ADMIN_TOKEN, "Надішліть інформацію про івент так: 2023.02.10 16:30 текст для відображення");
                 }
-                else if (usersDic[chatId].State == states.AddEvenet)
+                else if (usersDic[chatId].State == States.AddEvenet)
                 {
                     try
                     {
@@ -134,7 +134,7 @@ internal class Telegram
                         return;
                     }
                     await SendMessageAsync(ADMIN_TOKEN, "Додав івент");
-                    usersDic[chatId].State = states.Start;
+                    usersDic[chatId].State = States.Start;
                 }
                 else if (messageText == "/sendEvents")
                 {
@@ -188,17 +188,17 @@ internal class Telegram
             }
             else if (messageText == "Мені потрібна допомога ✅")
             {
-                usersDic[chatId].State = states.NeedHelp;
+                usersDic[chatId].State = States.NeedHelp;
                 await SendMessageAsync(chatId, "Чекаю ваш запит ✍");
             }
             else if (messageText == "Хочу запропонувати допомогу 🤲")
             {
-                usersDic[chatId].State = states.GiveHelp;
+                usersDic[chatId].State = States.GiveHelp;
                 await SendMessageAsync(chatId, "Чекаю вашу пропозицію ✍");
             }
             else if (messageText == "В мене інший запит ❔")
             {
-                usersDic[chatId].State = states.Support;
+                usersDic[chatId].State = States.Support;
                 await SendMessageAsync(chatId, "Чекаю ваш запит ✍");
             }
             else if (messageText == "Найближчі заходи 📅")
@@ -239,18 +239,18 @@ internal class Telegram
                     log.Error($"Помилка: {chatId} не мав визначеного usersDic[chatId].State та відправив повідомлення із текстом:\n{messageText}");
                 }
                 ///якщо не був обраний пункт із меню 
-                else if (usersDic[chatId].State == states.Start && chatId != ADMIN_TOKEN)
+                else if (usersDic[chatId].State == States.Start && chatId != ADMIN_TOKEN)
                 {
                     await SendMessageAsync(chatId, "Будь ласка, оберіть пункт з меню, який відповідає вашему запиту");
                 }
-                else if (usersDic[chatId].State == states.NeedHelp || usersDic[chatId].State == states.GiveHelp || usersDic[chatId].State == states.Support)
+                else if (usersDic[chatId].State == States.NeedHelp || usersDic[chatId].State == States.GiveHelp || usersDic[chatId].State == States.Support)
                 {
                     await SendMessageAsync(chatId, "Дякую за звернення, я передав ваше повідомлення в гуманітарний штаб 😊\n\nБудь ласка напишіть ваші ПІБ в форматі: Мельник Василій Петрович");
                     ///workingRowRequests - 1 тому що айді на 1 менше, ніж "робоча строка", через шапку таблиці      
                     reqDic.Add(chatId, new Request(workingRowRequests - 1, chatId, $"@{message.From.Username}", usersDic[chatId].State, messageText));
-                    usersDic[chatId].State = states.GetName;
+                    usersDic[chatId].State = States.GetName;
                 }
-                else if (usersDic[chatId].State == states.GetName)
+                else if (usersDic[chatId].State == States.GetName)
                 {
                     string[] PIB = messageText.TrimStart().TrimEnd().Split();
                     if (PIB.Length != 3)
@@ -259,14 +259,14 @@ internal class Telegram
                         return;
                     }
 
-                    usersDic[chatId].State = states.GetTel;
+                    usersDic[chatId].State = States.GetTel;
                     reqDic[chatId].FirstName = PIB[0];
                     reqDic[chatId].SecondName = PIB[1];
                     reqDic[chatId].ThirdName = PIB[2];
 
                     await SendMessageAsync(chatId, "Надішліть номер телефону у форматі: 380661234567");
                 }
-                else if (usersDic[chatId].State == states.GetTel)
+                else if (usersDic[chatId].State == States.GetTel)
                 {
                     messageText = messageText.TrimStart().TrimEnd();
                     if (!(Regex.IsMatch(messageText, "^\\+?[0-9]{12}$")))
@@ -275,7 +275,7 @@ internal class Telegram
                         return;
                     }
                     if (messageText[0] == '+') { _ = messageText.Remove(0, 1); }
-                    usersDic[chatId].State = states.Start;
+                    usersDic[chatId].State = States.Start;
                     reqDic[chatId].TelNumber = messageText;
 
                     var reqData = new List<object>()
@@ -301,7 +301,7 @@ internal class Telegram
                     if (chatId == ADMIN_TOKEN) { return; }
                     //await SendMessageAsync(ADMIN_TOKEN, CreateRequestMessage(usersDic[chatId], message, usersDic[chatId].State));
                     //await SendMessageAsync(chatId, "Дякую за звернення, я передав ваше повідомлення в гуманітарний штаб 😊");
-                    usersDic[chatId].State = states.Start;
+                    usersDic[chatId].State = States.Start;
                     await SendMessageAsync(chatId, "Якась помилка, будь ласка, знову оберіть пункт меню та повторіть запит 😥");
                 }
             }
@@ -339,20 +339,20 @@ internal class Telegram
         if (usersList is not null)
             foreach (var user in usersList)
             {
-                try { usersDic.Add(Convert.ToInt64(user[0]), new User((string)user[1], Convert.ToInt64(user[0]), states.Start)); }
+                try { usersDic.Add(Convert.ToInt64(user[0]), new User((string)user[1], Convert.ToInt64(user[0]), States.Start)); }
                 catch (ArgumentException ex) { await SendMessageAsync(ADMIN_TOKEN, $"Помилка бази даних в листі {Crud.TABLE_NAME_USERS}. Текст помилки:\n{ex.Message}"); }
             }
     }
 
     public static string CreateRequestMessage(Message message, Request req)
     {
-        states state = req.ReqState;
+        States state = req.ReqState;
         if (message.From is null) { return $"Помилка: немає даних\nАйді користувача: {message.Chat.Id}\nЗверніться до адміністратора"; }
         var sb = new StringBuilder();
         //додати на що запит
-        if (state == states.NeedHelp) { sb.AppendLine("<b>Класс</b>: #запит_на_допомогу"); }
-        else if (state == states.GiveHelp) { sb.AppendLine("<b>Класс</b>: #пропозиція_допомоги"); }
-        else if (state == states.Support) { sb.AppendLine("<b>Класс</b>: #інший_запит"); }
+        if (state == States.NeedHelp) { sb.AppendLine("<b>Класс</b>: #запит_на_допомогу"); }
+        else if (state == States.GiveHelp) { sb.AppendLine("<b>Класс</b>: #пропозиція_допомоги"); }
+        else if (state == States.Support) { sb.AppendLine("<b>Класс</b>: #інший_запит"); }
         sb.AppendLine($"<b>Від</b>: {message.From.FirstName} {message.From.LastName} | @{message.From.Username}");
         //додати підтягування номеру телефону із контакту по запиту або об'єкта юзера
         sb.Append("<b>Номер телефону</b>: ").AppendLine(req.TelNumber);
@@ -376,12 +376,12 @@ internal class Telegram
             replyMarkup: replyKeyboardMarkup,
             cancellationToken: cancellationToken);
     }
-    public static Dictionary<states, ReplyKeyboardMarkup> CreateMenuDictionary()
+    public static Dictionary<States, ReplyKeyboardMarkup> CreateMenuDictionary()
     {
-        var statesDic = new Dictionary<states, ReplyKeyboardMarkup>
+        var statesDic = new Dictionary<States, ReplyKeyboardMarkup>
         {
             {
-                states.Start,
+                States.Start,
                 new ReplyKeyboardMarkup(new[] {
                     new KeyboardButton[] {"Мені потрібна допомога ✅", "Хочу запропонувати допомогу 🤲"},
                     new KeyboardButton[] {"В мене інший запит ❔", "Найближчі заходи 📅" }

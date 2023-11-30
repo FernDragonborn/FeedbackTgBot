@@ -1,6 +1,6 @@
 ﻿namespace FeedbackTgBot
 {
-    internal class Schedule
+    internal struct Schedule
     {
         public Schedule(DateTime date, string text)
         {

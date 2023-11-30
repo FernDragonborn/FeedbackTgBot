@@ -3,18 +3,18 @@
 internal class User
 {
 
-    public User(string username, long chatId, states state)
+    public User(string username, long chatId, States state)
     {
         Username = username;
         ChatId = chatId;
-        State = states.Start;
+        State = States.Start;
     }
-    public string Username { get; set; }
-    public long ChatId { get; set; }
-    public states State { get; set; }
+    internal string Username { get; set; }
+    internal long ChatId { get; set; }
+    public States State { get; set; }
 }
 
-public enum states
+public enum States
 {
     Start,
     NeedHelp,
